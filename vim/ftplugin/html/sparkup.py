@@ -272,6 +272,8 @@ class HtmlDialect(Dialect):
         'textarea':{'name': ''},
         'meta':   {'content': ''},
     }
+    expand_tags = (
+            'div', 'ul', 'table', 'tr')
 
 class Parser:
     """The parser.
@@ -541,15 +543,25 @@ class Element:
 
         [Grouped under "Rendering methods"]
         """
-
         output = ""
         try:    spaces_count = int(self.parser.options.options['indent-spaces'])
         except: spaces_count = 4
         spaces = ' ' * spaces_count
         indent = self.depth * spaces
-        
+        post_indent = indent
+        new_line = '\n'
+        post_new_line = new_line
+
+        expand_tags = self.parser.dialect.expand_tags
+        if not self.expand and self.name not in expand_tags:
+            new_line = ''
+            post_indent = ''
+            if self.parent and (not self.parent.expand and self.parent.name not in expand_tags):
+                indent = ''
+                post_new_line = ''
+
         prefix, suffix = ('', '')
-        if self.prefix: prefix = self.prefix + "\n"
+        if self.prefix: prefix = self.prefix + new_line
         if self.suffix: suffix = self.suffix
 
         # Make the guide from the ID (/#header), or the class if there's no ID (/.item)
@@ -599,28 +611,28 @@ class Element:
 
             # For expand divs: if there are no children (that is, `output`
             # is still blank despite above), fill it with a blank line.
-            if (output == ''): output = indent + spaces + "\n"
+            if (output == ''): output = indent + spaces + post_new_line
 
             # If we're a root node and we have a prefix or suffix...
             # (Only the root node can have a prefix or suffix.)
             if prefix or suffix:
-                output = "%s%s%s%s%s\n" % \
-                    (indent, prefix, output, suffix, guide)
+                output = "%s%s%s%s%s%s" % \
+                    (indent, prefix, output, suffix, guide, post_new_line)
 
             # Uh..
             elif self.name != '' or \
                  self.opening_tag is not None or \
                  self.closing_tag is not None:
                 output = start_guide + \
-                         indent + self.get_opening_tag() + "\n" + \
+                         indent + self.get_opening_tag() + new_line + \
                          output + \
-                         indent + self.get_closing_tag() + \
-                         guide + end_guide + "\n"
+                         post_indent + self.get_closing_tag() + \
+                         guide + end_guide + post_new_line
             
 
         # Short, self-closing tags (<br />)
         elif self.name in short_tags: 
-            output = "%s<%s />\n" % (indent, self.get_default_tag())
+            output = "%s<%s />%s" % (indent, self.get_default_tag(), post_new_line)
 
         # Tags with text, possibly
         elif self.name != '' or \
@@ -630,7 +642,7 @@ class Element:
                 (start_guide, indent, self.get_opening_tag(), \
                  self.text, \
                  self.get_closing_tag(), \
-                 guide, end_guide, "\n")
+                 guide, end_guide, post_new_line)
 
         # Else, it's an empty-named element (like the root). Pass.
         else: pass
